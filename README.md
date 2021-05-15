@@ -42,14 +42,14 @@ where <img src="https://latex.codecogs.com/gif.latex?r_0" />,
 
 Fine-tuned for stable coins. (ex: Curve protocol)
 
-### K3PR-Powered Yield Rebalancing
+### KP3R-Powered Yield Rebalancing
 
-MIRIN provides you an automatic yield rebalancing tool, powered by K3PR technology. This can benefit you, since you can add a dedicated job to seek out the best LP yields for you. Keepers do the dirty work of all the calculations and comparisons needed to find the highest returns and automatically switches into those optimal pairs.
+MIRIN provides you an automatic yield rebalancing tool, powered by KP3R technology. This can benefit you, since you can add a dedicated job to seek out the best LP yields for you. Keepers do the dirty work of all the calculations and comparisons needed to find the highest returns and automatically switches into those optimal pairs.
 
 ## RoadMap
 - [x] Franchised Pool
 - [x] New Curve Options (ETA: late-March)
-- [x] K3PR-Powered Yield Rebalancing (ETA: mid-April)
+- [x] KP3R-Powered Yield Rebalancing (ETA: mid-April)
 - [ ] Test Coverage (ETA: late-April)
 - [ ] Gas Optimization & Internal Audit (ETA: mid-May)
 - [ ] Formal Verification (ETA: late-May)
