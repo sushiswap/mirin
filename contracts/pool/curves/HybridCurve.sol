@@ -5,6 +5,7 @@ pragma solidity =0.8.4;
 import "../../interfaces/IMirinCurve.sol";
 import "../../libraries/SafeMath.sol";
 import "../../libraries/MathUtils.sol";
+import "hardhat/console.sol";
 
 /**
  * @dev Hybrid curve of constant product and constant sum ones (4a(r_0 +r _1) + k = 4ak + (k^3/4r_0r_1))
@@ -30,14 +31,14 @@ contract HybridCurve is IMirinCurve {
     function canUpdateData(bytes32 oldData, bytes32 newData) external pure override returns (bool) {
         (uint8 oldDecimals0, uint8 oldDecimals1, ) = decodeData(oldData);
         (uint8 newDecimals0, uint8 newDecimals1, uint240 newA) = decodeData(newData);
-        return oldDecimals0 == newDecimals0 && oldDecimals1 == newDecimals1 && newA > 0;
+        return oldDecimals0 == newDecimals0 && oldDecimals1 == newDecimals1 && newA >= A_PRECISION;
     }
 
     function isValidData(bytes32 data) public pure override returns (bool) {
         uint8 decimals0 = uint8(uint256(data) >> 248);
         uint8 decimals1 = uint8((uint256(data) >> 240) % (1 << 8));
         uint240 A = uint240(uint256(data));
-        return decimals0 <= POOL_PRECISION_DECIMALS && decimals1 <= POOL_PRECISION_DECIMALS && A > 0;
+        return decimals0 <= POOL_PRECISION_DECIMALS && decimals1 <= POOL_PRECISION_DECIMALS && A >= A_PRECISION;
     }
 
     function decodeData(bytes32 data)
@@ -53,7 +54,7 @@ contract HybridCurve is IMirinCurve {
         decimals1 = uint8((uint256(data) >> 240) % (1 << 8));
         A = uint240(uint256(data));
         require(
-            decimals0 <= POOL_PRECISION_DECIMALS && decimals1 <= POOL_PRECISION_DECIMALS && A > 0,
+            decimals0 <= POOL_PRECISION_DECIMALS && decimals1 <= POOL_PRECISION_DECIMALS && A >= A_PRECISION,
             "MIRIN: INVALID_DATA"
         );
     }
@@ -96,7 +97,7 @@ contract HybridCurve is IMirinCurve {
         uint256 y = _getY(x, xp, A);
         uint256 dy = xp[1 - tokenIn] - y - 1;
         dy = dy - ((dy * swapFee) / 1000);
-        dy = dy * 10**(POOL_PRECISION_DECIMALS - (tokenIn != 0 ? decimals0 : decimals1));
+        dy = dy / 10**(POOL_PRECISION_DECIMALS - (tokenIn != 0 ? decimals0 : decimals1));
         return dy;
     }
 
@@ -134,14 +135,22 @@ contract HybridCurve is IMirinCurve {
         uint256 nA = _A * 2;
 
         for (uint256 i = 0; i < MAX_LOOP_LIMIT; i++) {
-            uint256 dP = D**3 / (xp[0] * xp[1] * 4);
+            uint256 dP = D;
+            for (uint256 j = 0; j < 2; j++) {
+                dP *= D / (xp[j] * 2);
+                // If we were to protect the division loss we would have to keep the denominator separate
+                // and divide at the end. However this leads to overflow with large numTokens or/and D.
+                // dP = dP * D * D * D * ... overflow!
+            }
             prevD = D;
-            D = nA.mul(s).div(A_PRECISION).add(dP * 2).mul(D).div(nA.div(A_PRECISION).sub(1).mul(D).add(dP * 3));
+            D = nA.mul(s).div(A_PRECISION).add(dP * 2).mul(D).div(
+                nA.sub(A_PRECISION).mul(D).div(A_PRECISION).add(dP * 3)
+            );
             if (D.within1(prevD)) {
-                break;
+                return D;
             }
         }
-        return D;
+        revert("MIRIN: MAX_LOOP_REACHED");
     }
 
     /**
@@ -161,11 +170,11 @@ contract HybridCurve is IMirinCurve {
         uint256[2] memory xp,
         uint256 _A
     ) private pure returns (uint256) {
+
         uint256 D = _getD(xp, _A);
         uint256 nA = 2 * _A;
-        uint256 c = D**2 / (x * 2);
 
-        c = (c * D * A_PRECISION) / (nA * 2);
+        uint256 c = (D**3 * A_PRECISION) / (nA * x * 4);
         uint256 b = x + ((D * A_PRECISION) / nA);
         uint256 yPrev;
         uint256 y = D;
@@ -175,10 +184,10 @@ contract HybridCurve is IMirinCurve {
             yPrev = y;
             y = (y * y + c) / (y * 2 + b - D);
             if (y.within1(yPrev)) {
-                break;
+                return y;
             }
         }
-        return y;
+        revert("MIRIN: MAX_LOOP_REACHED");
     }
 
     /**
@@ -220,10 +229,10 @@ contract HybridCurve is IMirinCurve {
             yPrev = y;
             y = (y * y + c) / (y * 2 + b - D);
             if (y.within1(yPrev)) {
-                break;
+                return y;
             }
         }
-        return y;
+        revert("MIRIN: MAX_LOOP_REACHED");
     }
 
     function _xp(
