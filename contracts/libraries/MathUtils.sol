@@ -12,8 +12,6 @@ import "./SafeMath.sol";
  * @dev Originally https://github.com/saddle-finance/saddle-contract/blob/0b76f7fb519e34b878aa1d58cffc8d8dc0572c12/contracts/MathUtils.sol
  */
 library MathUtils {
-    using SafeMath for uint256;
-
     /**
      * @notice Compares a and b and returns true if the difference between a and b
      *         is less than 1 or equal to each other.
@@ -33,9 +31,11 @@ library MathUtils {
      * @return Difference between a and b
      */
     function difference(uint256 a, uint256 b) internal pure returns (uint256) {
-        if (a > b) {
-            return a.sub(b);
+        unchecked {
+            if (a > b) {
+                return a - b;
+            }
+            return b - a;
         }
-        return b.sub(a);
     }
 }

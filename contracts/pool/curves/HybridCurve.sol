@@ -14,7 +14,6 @@ import "hardhat/console.sol";
  * @author LevX
  */
 contract HybridCurve is IMirinCurve {
-    using SafeMath for *;
     using MathUtils for uint256;
 
     uint8 private constant PRECISION = 104;
@@ -27,6 +26,7 @@ contract HybridCurve is IMirinCurve {
 
     // Constant values used in ramping A calculations
     uint256 private constant A_PRECISION = 100;
+    uint256 private constant SWAP_FEE_PRECISION = 1000;
 
     function canUpdateData(bytes32 oldData, bytes32 newData) external pure override returns (bool) {
         (uint8 oldDecimals0, uint8 oldDecimals1, ) = decodeData(oldData);
@@ -96,7 +96,7 @@ contract HybridCurve is IMirinCurve {
         uint256 x = xp[tokenIn] + amountIn;
         uint256 y = _getY(x, xp, A);
         uint256 dy = xp[1 - tokenIn] - y - 1;
-        dy = dy - ((dy * swapFee) / 1000);
+        dy = (dy * SWAP_FEE_PRECISION - dy * swapFee) / SWAP_FEE_PRECISION;
         dy = dy / 10**(POOL_PRECISION_DECIMALS - (tokenIn != 0 ? decimals0 : decimals1));
         return dy;
     }
@@ -143,9 +143,10 @@ contract HybridCurve is IMirinCurve {
                 // dP = dP * D * D * D * ... overflow!
             }
             prevD = D;
-            D = nA.mul(s).div(A_PRECISION).add(dP * 2).mul(D).div(
-                nA.sub(A_PRECISION).mul(D).div(A_PRECISION).add(dP * 3)
+            D = ((nA * s / A_PRECISION) + dP * 2) * D / (
+                (nA - A_PRECISION) * D / A_PRECISION + dP * 3
             );
+
             if (D.within1(prevD)) {
                 return D;
             }
@@ -182,7 +183,7 @@ contract HybridCurve is IMirinCurve {
         // iterative approximation
         for (uint256 i = 0; i < MAX_LOOP_LIMIT; i++) {
             yPrev = y;
-            y = (y * y + c) / (y * 2 + b - D);
+            y = (y**2 + c) / (y * 2 + b - D);
             if (y.within1(yPrev)) {
                 return y;
             }
@@ -222,12 +223,12 @@ contract HybridCurve is IMirinCurve {
         uint256 c = D**2 / (s * 2);
         c = (c * D * A_PRECISION) / (nA * 2);
 
-        uint256 b = s.add(D.mul(A_PRECISION).div(nA));
+        uint256 b = s + D * A_PRECISION / nA;
         uint256 yPrev;
         uint256 y = D;
         for (uint256 i = 0; i < MAX_LOOP_LIMIT; i++) {
             yPrev = y;
-            y = (y * y + c) / (y * 2 + b - D);
+            y = (y ** 2 + c) / (y * 2 + b - D);
             if (y.within1(yPrev)) {
                 return y;
             }

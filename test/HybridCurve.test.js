@@ -63,7 +63,7 @@ describe("HybridCurve.sol test", function () {
         });
 
         it("Succeeds when data is valid", async function () {
-            for (let n = 0; n < 100; n++) {
+            for (let n = 0; n < 1000; n++) {
                 let data = buildRandData();
                 let expected = decodeData(data);
                 let result = await test.decodeData(data);
@@ -75,21 +75,20 @@ describe("HybridCurve.sol test", function () {
     describe("#computeAmountOut()", () => {
         it("Succeeds with 18 decimal tokens", async function () {
             // Swap 1e17 of 18 decimal token for 18 decimal token at varying A values
-
             expect(
                 await test.computeAmountOut(String(1e17), String(1e18), String(1e18), buildData(18, 18, 100), 3, 0)
-            ).to.eq("94941617877778400");
+            ).to.eq("94941617877778399");
 
             expect(
                 await test.computeAmountOut(String(1e17), String(1e18), String(1e18), buildData(18, 18, 5000), 3, 0)
-            ).to.eq("99503006734612205");
+            ).to.eq("99503006734612204");
 
             expect(
                 await test.computeAmountOut(String(1e17), String(1e18), String(1e18), buildData(18, 18, 500000), 3, 0)
-            ).to.eq("99697986310591445");
+            ).to.eq("99697986310591444");
         });
 
-        it("Succeeds with different decimal tokens", async function () {
+        it("Succeeds with tokens of different decimals", async function () {
             // Swap 1e17 of 18 decimal token for 6 decimal token at varying A values
             expect(
                 await test.computeAmountOut(String(1e17), String(1e18), String(1e6), buildData(18, 6, 100), 3, 0)
@@ -106,15 +105,15 @@ describe("HybridCurve.sol test", function () {
             // Swap 1e5 of 6 decimal token for 18 decimal token at varying A values
             expect(
                 await test.computeAmountOut(String(1e5), String(1e18), String(1e6), buildData(18, 6, 100), 3, 1)
-            ).to.eq("94941617877778400");
+            ).to.eq("94941617877778399");
 
             expect(
                 await test.computeAmountOut(String(1e5), String(1e18), String(1e6), buildData(18, 6, 5000), 3, 1)
-            ).to.eq("99503006734612205");
+            ).to.eq("99503006734612204");
 
             expect(
                 await test.computeAmountOut(String(1e5), String(1e18), String(1e6), buildData(18, 6, 500000), 3, 1)
-            ).to.eq("99697986310591445");
+            ).to.eq("99697986310591444");
         });
     });
 });
