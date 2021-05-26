@@ -318,40 +318,56 @@ library MirinMath {
         return c1 / b;
     }
 
-    function power(uint256 base, uint256 exp) internal pure returns (uint256) {
+    function ceilMul(uint256 a, uint256 b) internal pure returns (uint256) {
+        uint256 c0 = a * b;
+        return c0 % BASE18 == 0 ? c0 / BASE18 : c0 / BASE18 + 1;
+    }
+
+    function ceilDiv(uint256 a, uint256 b) internal pure returns (uint256) {
+        uint256 c0 = a * BASE18;
+        return c0 % b == 0 ? c0 / b : c0 / b + 1;
+    }
+
+    function power(
+        uint256 base,
+        uint256 exp,
+        bool isUp
+    ) internal pure returns (uint256) {
         require(base >= MIN_POWER_BASE, "MIRIN: POWER_BASE_TOO_LOW");
         require(base <= MAX_POWER_BASE, "MIRIN: POWER_BASE_TOO_HIGH");
 
         uint256 whole = toFloor(exp);
         uint256 remain = exp - whole;
-
-        uint256 wholePow = powInt(base, toInt(whole));
+        uint256 wholePow;
+        if (whole == 0) wholePow = BASE18;
+        else if (whole == BASE18) wholePow = base;
+        else wholePow = powInt(base, toInt(whole));
 
         if (remain == 0) {
             return wholePow;
         }
-
-        uint256 partialResult = powFrac(base, remain, POWER_PRECISION);
-        return roundMul(wholePow, partialResult);
+        uint256 partialResult = powFrac(base, remain, POWER_PRECISION, isUp);
+        return ceilMul(wholePow, partialResult);
     }
 
     function powInt(uint256 a, uint256 n) private pure returns (uint256) {
         uint256 z = n % 2 != 0 ? a : BASE18;
-
-        for (n /= 2; n != 0; n /= 2) {
+        for (n /= 2; n > 1; n /= 2) {
             a = roundMul(a, a);
 
             if (n % 2 != 0) {
                 z = roundMul(z, a);
             }
         }
-        return z;
+        a = ceilMul(a, a);
+        return ceilMul(z, a);
     }
 
     function powFrac(
         uint256 base,
         uint256 exp,
-        uint256 precision
+        uint256 precision,
+        bool isUp
     ) private pure returns (uint256) {
         uint256 a = exp;
         (uint256 x, bool xneg) = base >= BASE18 ? (base - BASE18, false) : (BASE18 - base, true);
@@ -374,6 +390,7 @@ library MirinMath {
                 sum = sum + term;
             }
         }
+        if (isUp && negative) sum = sum + term / 10;
         return sum;
     }
 }

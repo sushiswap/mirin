@@ -88,10 +88,20 @@ contract ConstantMeanCurve is IMirinCurve {
         require(amountIn <= reserveIn / 2, "MIRIN: ERR_MAX_IN_RATIO");
 
         uint256 weightRatio = MirinMath.roundDiv(uint256(weightIn), uint256(weightOut));
-        uint256 adjustedIn = MirinMath.roundMul(amountIn, MirinMath.BASE18 - (uint256(swapFee) * 10**15));
-        uint256 base = MirinMath.roundDiv(uint256(reserveIn), uint256(reserveIn) + adjustedIn);
-        uint256 pow = MirinMath.power(base, weightRatio);
-        amountOut = MirinMath.roundMul(uint256(reserveOut), MirinMath.BASE18 - pow);
+        uint256 adjustedIn = amountIn * (MirinMath.BASE18 - (uint256(swapFee) * 10**15));
+        uint256 base =
+            MirinMath.ceilDiv(
+                uint256(reserveIn) * MirinMath.BASE18,
+                uint256(reserveIn) * MirinMath.BASE18 + adjustedIn
+            );
+        if (base == MirinMath.BASE18) {
+            base = MirinMath.roundDiv(
+                uint256(reserveIn) * MirinMath.BASE18,
+                uint256(reserveIn) * MirinMath.BASE18 + adjustedIn
+            );
+        }
+        uint256 pow = MirinMath.power(base, weightRatio, false);
+        amountOut = (uint256(reserveOut) * (MirinMath.BASE18 - pow)) / MirinMath.BASE18;
     }
 
     function computeAmountIn(
@@ -110,8 +120,10 @@ contract ConstantMeanCurve is IMirinCurve {
         require(amountOut <= reserveOut / 3, "MIRIN: ERR_MAX_OUT_RATIO");
 
         uint256 weightRatio = MirinMath.roundDiv(uint256(weightOut), uint256(weightIn));
-        uint256 base = MirinMath.roundDiv(uint256(reserveOut), uint256(reserveOut) - amountOut);
-        uint256 pow = MirinMath.power(base, weightRatio);
-        amountIn = (uint256(reserveIn) * (pow - MirinMath.BASE18)) / (MirinMath.BASE18 - (uint256(swapFee) * 10**15));
+        uint256 base = MirinMath.ceilDiv(uint256(reserveOut), uint256(reserveOut) - amountOut);
+        uint256 pow = MirinMath.power(base, weightRatio, true);
+        uint256 adjustedIn = uint256(reserveIn) * (pow - MirinMath.BASE18);
+        uint256 denominator = (MirinMath.BASE18 - (uint256(swapFee) * 10**15));
+        amountIn = adjustedIn % denominator == 0 ? adjustedIn / denominator : adjustedIn / denominator + 1;
     }
 }
