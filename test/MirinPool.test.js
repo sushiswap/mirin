@@ -76,13 +76,16 @@ describe("MirinPool Test", function () {
     async function randSwap0to1(addr) {
         const tk0bal = await token0.balanceOf(test.address);
         const tk1bal = await token1.balanceOf(test.address);
-
-        let tk0aIn = rand();
-        while (tk0aIn.gt(tk0bal.div(2))) {
+        let tk0aIn = 0;
+        let tk1aOut = 0;
+        while(tk1aOut == 0) {
             tk0aIn = rand();
-        }
+            while (tk0aIn.gt(tk0bal.div(2))) {
+                tk0aIn = rand();
+            }
 
-        const tk1aOut = await curve.computeAmountOut(tk0aIn.mul(4).div(5), tk1bal, tk0bal, getData(20), 3, 1);
+            tk1aOut = await curve.computeAmountOut(tk0aIn.mul(4).div(5), tk1bal, tk0bal, getData(20), 3, 1);
+        }
         await token0.connect(addr).transfer(test.address, tk0aIn);
         await test.connect(addr).functions["swap(uint256,uint256,address)"](tk1aOut, 0, addr.address);
     }
@@ -90,13 +93,16 @@ describe("MirinPool Test", function () {
     async function randSwap1to0(addr) {
         const tk0bal = await token0.balanceOf(test.address);
         const tk1bal = await token1.balanceOf(test.address);
-
-        let tk1aIn = rand();
-        while (tk1aIn.gt(tk1bal.div(2))) {
+        let tk1aIn = 0;
+        let tk0aOut = 0;
+        while(tk0aOut == 0) {
             tk1aIn = rand();
-        }
+            while (tk1aIn.gt(tk1bal.div(2))) {
+                tk1aIn = rand();
+            }
 
-        const tk0aOut = await curve.computeAmountOut(tk1aIn.mul(4).div(5), tk1bal, tk0bal, getData(20), 3, 0);
+            tk0aOut = await curve.computeAmountOut(tk1aIn.mul(4).div(5), tk1bal, tk0bal, getData(20), 3, 0);
+        }
         await token1.connect(addr).transfer(test.address, tk1aIn);
         await test.connect(addr).functions["swap(uint256,uint256,address)"](0, tk0aOut, addr.address);
     }
@@ -782,14 +788,21 @@ describe("MirinPool Test", function () {
             while (tk0aIn0.gt(tk0bal.div(2))) {
                 tk0aIn0 = rand();
             }
+
             let tk1aOut0 = await curve.computeAmountOut(tk0aIn0, tk1bal, tk0bal, getData(20), 3, 1);
-            const exTk1aOut0 = tk1aOut0 < 10 ** 6 ? tk1aOut0.add(10) : tk1aOut0.add(tk1aOut0.div(10 ** 6));
+            while(tk1aOut0.eq(BigNumber.from(0))) {
+                tk0aIn0 = rand();
+                while (tk0aIn0.gt(tk0bal.div(2))) {
+                    tk0aIn0 = rand();
+                }
+                tk1aOut0 = await curve.computeAmountOut(tk0aIn0, tk1bal, tk0bal, getData(20), 3, 1);
+            }
+            const exTk1aOut0 = tk1aOut0 < 10 ** 4 ? tk1aOut0.add(100) : tk1aOut0.add(tk1aOut0.div(10 ** 4));
 
             await token0.connect(addr1).transfer(test.address, tk0aIn0);
             await expect(
                 test.functions["swap(uint256,uint256,address)"](exTk1aOut0, 0, addr1.address)
             ).to.be.revertedWith("MIRIN: LIQUIDITY");
-
             let tx = await test.connect(addr1).functions["swap(uint256,uint256,address)"](tk1aOut0, 0, addr1.address);
             let res = await tx.wait();
             let last = res.events.length - 1;
@@ -809,15 +822,23 @@ describe("MirinPool Test", function () {
             while (tk0aOut0.gt(tk0bal.div(3))) {
                 tk0aOut0 = rand();
             }
-            const exTk0aOut0 = tk0aOut0 < 10 ** 6 ? tk0aOut0.add(10) : tk0aOut0.add(tk0aOut0.div(10 ** 6));
 
             let tk1aIn0 = await curve.computeAmountIn(tk0aOut0, tk1bal, tk0bal, getData(20), 3, 0);
+            while(tk1aIn0.eq(BigNumber.from(0))) {
+                tk0aOut0 = rand();
+                while (tk0aOut0.gt(tk0bal.div(3))) {
+                    tk0aOut0 = rand();
+                }
+                tk1aIn0 = await curve.computeAmountIn(tk0aOut0, tk1bal, tk0bal, getData(20), 3, 0);
+            }
+
+            const exTk0aOut0 = tk0aOut0 < 10 ** 4 ? tk0aOut0.add(100) : tk0aOut0.add(tk0aOut0.div(10 ** 4));
 
             await token1.connect(addr1).transfer(test.address, tk1aIn0);
             await expect(
                 test.functions["swap(uint256,uint256,address)"](0, exTk0aOut0, addr1.address)
             ).to.be.revertedWith("MIRIN: LIQUIDITY");
-
+            
             tx = await test.connect(addr1).functions["swap(uint256,uint256,address)"](0, tk0aOut0, addr1.address);
             res = await tx.wait();
             last = res.events.length - 1;
@@ -869,7 +890,6 @@ describe("MirinPool Test", function () {
 
             const tk0bal0 = await token0.balanceOf(test.address);
             const tk1bal0 = await token1.balanceOf(test.address);
-
             await randSwap0to1(addr1);
             await randSwap0to1(addr1);
             await randSwap0to1(addr2);
