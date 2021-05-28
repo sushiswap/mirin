@@ -47,12 +47,7 @@ Fine-tuned for stable coins. (ex: Curve protocol)
 MIRIN provides you an automatic yield rebalancing tool, powered by K3PR technology. This can benefit you, since you can add a dedicated job to seek out the best LP yields for you. Keepers do the dirty work of all the calculations and comparisons needed to find the highest returns and automatically switches into those optimal pairs.
 
 ## RoadMap
-- [x] Franchised Pool
-- [x] New Curve Options (ETA: late-March)
-- [x] K3PR-Powered Yield Rebalancing (ETA: mid-April)
-- [ ] Test Coverage (ETA: late-April)
-- [ ] Gas Optimization & Internal Audit (ETA: mid-May)
-- [ ] Formal Verification (ETA: late-May)
+This repo will be consolidated to the SushiSwap's nextgen AMM.
 
 ## License
 
@@ -60,5 +55,5 @@ Distributed under the MIT License. See `LICENSE` for more information.
 
 ## Contact
 
-* [Andre Cronje](https://twitter.com/AndreCronjeTech/)
 * [LevX](https://twitter.com/LevxApp/)
+* [TheGreatHB](https://www.notion.so/thegreathb/About-TheGreatHB-c99efbc35a3f487c869a86a810470d16)
