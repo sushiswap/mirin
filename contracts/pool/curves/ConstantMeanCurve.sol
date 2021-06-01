@@ -94,12 +94,7 @@ contract ConstantMeanCurve is IMirinCurve {
                 uint256(reserveIn) * MirinMath.BASE18,
                 uint256(reserveIn) * MirinMath.BASE18 + adjustedIn
             );
-        if (base == MirinMath.BASE18) {
-            base = MirinMath.roundDiv(
-                uint256(reserveIn) * MirinMath.BASE18,
-                uint256(reserveIn) * MirinMath.BASE18 + adjustedIn
-            );
-        }
+        if (base == MirinMath.BASE18) base = base - 1;
         uint256 pow = MirinMath.power(base, weightRatio, false);
         amountOut = (uint256(reserveOut) * (MirinMath.BASE18 - pow)) / MirinMath.BASE18;
     }
