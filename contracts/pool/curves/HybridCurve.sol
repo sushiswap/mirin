@@ -25,7 +25,10 @@ contract HybridCurve is IMirinCurve {
 
     // Constant values used in ramping A calculations
     uint256 private constant A_PRECISION = 100;
+
+    // Swap fee precision. Fees are in increments of 10 bps and cannot be higher than 10%.
     uint256 private constant SWAP_FEE_PRECISION = 1000;
+    uint256 private constant MAX_SWAP_FEE = 100;
 
     function canUpdateData(bytes32 oldData, bytes32 newData) external pure override returns (bool) {
         (uint8 oldDecimals0, uint8 oldDecimals1, ) = decodeData(oldData);
@@ -89,6 +92,10 @@ contract HybridCurve is IMirinCurve {
         uint8 swapFee,
         uint8 tokenIn
     ) external pure override returns (uint256 amountOut) {
+        require(amountIn > 0, "MIRIN: INSUFFICIENT_INPUT_AMOUNT");
+        require(reserve0 > 0 && reserve1 > 0, "MIRIN: INSUFFICIENT_LIQUIDITY");
+        require(swapFee <= MAX_SWAP_FEE, "MIRIN: INVALID_SWAP_FEE");
+
         (uint8 decimals0, uint8 decimals1, uint240 A) = decodeData(data);
         uint256[2] memory xp = _xp(reserve0, reserve1, decimals0, decimals1);
         amountIn = amountIn * 10**(POOL_PRECISION_DECIMALS - (tokenIn != 0 ? decimals1 : decimals0));
@@ -107,6 +114,10 @@ contract HybridCurve is IMirinCurve {
         uint8 swapFee,
         uint8 tokenIn
     ) external pure override returns (uint256 amountIn) {
+        require(amountOut > 0, "MIRIN: INSUFFICIENT_OUTPUT_AMOUNT");
+        require(reserve0 > 0 && reserve1 > 0, "MIRIN: INSUFFICIENT_LIQUIDITY");
+        require(swapFee <= MAX_SWAP_FEE, "MIRIN: INVALID_SWAP_FEE");
+
         (uint8 decimals0, uint8 decimals1, uint240 A) = decodeData(data);
         uint256[2] memory xp = _xp(reserve0, reserve1, decimals0, decimals1);
         amountOut = amountOut * 10**(POOL_PRECISION_DECIMALS - (tokenIn != 0 ? decimals0 : decimals1));
