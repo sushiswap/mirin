@@ -230,7 +230,7 @@ contract HybridCurve is IMirinCurve {
         uint256 y = D;
         for (uint256 i = 0; i < MAX_LOOP_LIMIT; i++) {
             yPrev = y;
-            y = (y ** 2 + c) / (y * 2 + b.difference(D));
+            y = (y ** 2 + c) / (y * 2 + b - D);
             if (y.within1(yPrev)) {
                 return y;
             }
