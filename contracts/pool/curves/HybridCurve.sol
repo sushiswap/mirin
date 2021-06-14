@@ -5,13 +5,12 @@ pragma solidity =0.8.4;
 import "../../interfaces/IMirinCurve.sol";
 import "../../libraries/SafeMath.sol";
 import "../../libraries/MathUtils.sol";
-import "hardhat/console.sol";
 
 /**
  * @dev Hybrid curve of constant product and constant sum ones (4a(r_0 +r _1) + k = 4ak + (k^3/4r_0r_1))
  * Excerpted from https://github.com/saddle-finance/saddle-contract/blob/0b76f7fb519e34b878aa1d58cffc8d8dc0572c12/contracts/SwapUtils.sol
  *
- * @author LevX
+ * @author LevX, penandlim(@weeb_mcgee)
  */
 contract HybridCurve is IMirinCurve {
     using MathUtils for uint256;
@@ -89,16 +88,15 @@ contract HybridCurve is IMirinCurve {
         bytes32 data,
         uint8 swapFee,
         uint8 tokenIn
-    ) external pure override returns (uint256) {
+    ) external pure override returns (uint256 amountOut) {
         (uint8 decimals0, uint8 decimals1, uint240 A) = decodeData(data);
         uint256[2] memory xp = _xp(reserve0, reserve1, decimals0, decimals1);
         amountIn = amountIn * 10**(POOL_PRECISION_DECIMALS - (tokenIn != 0 ? decimals1 : decimals0));
         uint256 x = xp[tokenIn] + amountIn;
         uint256 y = _getY(x, xp, A);
-        uint256 dy = xp[1 - tokenIn] - y - 1;
-        dy = (dy * SWAP_FEE_PRECISION - dy * swapFee) / SWAP_FEE_PRECISION;
-        dy = dy / 10**(POOL_PRECISION_DECIMALS - (tokenIn != 0 ? decimals0 : decimals1));
-        return dy;
+        amountOut = xp[1 - tokenIn] - y - 1;
+        amountOut = (amountOut * (SWAP_FEE_PRECISION - swapFee)) / SWAP_FEE_PRECISION;
+        amountOut = amountOut / 10**(POOL_PRECISION_DECIMALS - (tokenIn != 0 ? decimals0 : decimals1));
     }
 
     function computeAmountIn(
@@ -109,7 +107,14 @@ contract HybridCurve is IMirinCurve {
         uint8 swapFee,
         uint8 tokenIn
     ) external pure override returns (uint256 amountIn) {
-        amountIn = 0; // TODO
+        (uint8 decimals0, uint8 decimals1, uint240 A) = decodeData(data);
+        uint256[2] memory xp = _xp(reserve0, reserve1, decimals0, decimals1);
+        amountOut = amountOut * 10**(POOL_PRECISION_DECIMALS - (tokenIn != 0 ? decimals0 : decimals1));
+        amountOut = (amountOut * SWAP_FEE_PRECISION) / (SWAP_FEE_PRECISION - swapFee);
+        uint256 y = xp[1 - tokenIn] - amountOut;
+        uint256 x = _getY(y, xp, A);
+        amountIn = x + 1 - xp[tokenIn];
+        amountIn = amountIn / 10**(POOL_PRECISION_DECIMALS - (tokenIn != 0 ? decimals1: decimals0));
     }
 
     /**
@@ -136,15 +141,12 @@ contract HybridCurve is IMirinCurve {
 
         for (uint256 i = 0; i < MAX_LOOP_LIMIT; i++) {
             uint256 dP = D;
-            for (uint256 j = 0; j < 2; j++) {
-                dP *= D / (xp[j] * 2);
-                // If we were to protect the division loss we would have to keep the denominator separate
-                // and divide at the end. However this leads to overflow with large numTokens or/and D.
-                // dP = dP * D * D * D * ... overflow!
-            }
+            dP = dP * D / (xp[0] * 2);
+            dP = dP * D / (xp[1] * 2);
+
             prevD = D;
-            D = ((nA * s / A_PRECISION) + dP * 2) * D / (
-                (nA - A_PRECISION) * D / A_PRECISION + dP * 3
+            D = (((nA * s / A_PRECISION) + (dP * 2)) * D) / (
+                (nA - A_PRECISION) * D / A_PRECISION + (dP * 3)
             );
 
             if (D.within1(prevD)) {
@@ -171,12 +173,12 @@ contract HybridCurve is IMirinCurve {
         uint256[2] memory xp,
         uint256 _A
     ) private pure returns (uint256) {
-
         uint256 D = _getD(xp, _A);
         uint256 nA = 2 * _A;
 
         uint256 c = (D**3 * A_PRECISION) / (nA * x * 4);
         uint256 b = x + ((D * A_PRECISION) / nA);
+
         uint256 yPrev;
         uint256 y = D;
 
@@ -228,7 +230,7 @@ contract HybridCurve is IMirinCurve {
         uint256 y = D;
         for (uint256 i = 0; i < MAX_LOOP_LIMIT; i++) {
             yPrev = y;
-            y = (y ** 2 + c) / (y * 2 + b - D);
+            y = (y ** 2 + c) / (y * 2 + b.difference(D));
             if (y.within1(yPrev)) {
                 return y;
             }
