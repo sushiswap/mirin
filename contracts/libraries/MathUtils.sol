@@ -2,8 +2,6 @@
 
 pragma solidity =0.8.4;
 
-import "./SafeMath.sol";
-
 /**
  * @title MathUtils library
  * @notice A library to be used in conjuction with SafeMath. Contains functions for calculating

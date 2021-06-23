@@ -3,7 +3,6 @@
 pragma solidity =0.8.4;
 
 import "../../interfaces/IMirinCurve.sol";
-import "../../libraries/SafeMath.sol";
 import "../../libraries/MathUtils.sol";
 
 /**
@@ -151,9 +150,7 @@ contract HybridCurve is IMirinCurve {
         uint256 nA = _A * 2;
 
         for (uint256 i = 0; i < MAX_LOOP_LIMIT; i++) {
-            uint256 dP = D;
-            dP = dP * D / (xp[0] * 2);
-            dP = dP * D / (xp[1] * 2);
+            uint256 dP = ((D**2) / (xp[0] * 2)) * D / (xp[1] * 2);
 
             prevD = D;
             D = (((nA * s / A_PRECISION) + (dP * 2)) * D) / (
@@ -187,7 +184,7 @@ contract HybridCurve is IMirinCurve {
         uint256 D = _getD(xp, _A);
         uint256 nA = 2 * _A;
 
-        uint256 c = (D**3 * A_PRECISION) / (nA * x * 4);
+        uint256 c = ((D**2) / (x * 2)) * D * A_PRECISION / (nA * 2);
         uint256 b = x + ((D * A_PRECISION) / nA);
 
         uint256 yPrev;
