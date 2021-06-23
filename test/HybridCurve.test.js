@@ -74,6 +74,19 @@ describe("HybridCurve.sol test", function () {
 
     describe("#computeAmountOut()", () => {
         describe("Pair of same decimals (18 decimals + 18 decimals pair)", () => {
+            it("Succeeds even when using high balance", async function () {
+                expect(
+                    await test.computeAmountOut(
+                        BigNumber.from(10).pow(25),
+                        BigNumber.from(10).pow(33),
+                        BigNumber.from(10).pow(33),
+                        buildData(18, 18, 100),
+                        3,
+                        0
+                    )
+                ).to.be.eq("9969999950150000249249997");
+            });
+
             it("Succeeds to calculate amount out", async function () {
                 // Swap 1e17 of 18 decimal token for 18 decimal token at varying A values
                 expect(
@@ -468,6 +481,230 @@ describe("HybridCurve.sol test", function () {
                     )
                 ).to.eq("99999");
             });
+        });
+    });
+
+    describe("#computeLiquidity()", () => {
+        it("Successfully calculates D at balanced ratio", async () => {
+            // Compute how much total liquidity is available
+            expect(await test.computeLiquidity(String(1e18), String(1e18), buildData(18, 18, 100))).to.eq(String(2e18));
+
+            expect(await test.computeLiquidity(String(1e18), String(1e18), buildData(18, 18, 1000))).to.eq(
+                String(2e18)
+            );
+
+            expect(await test.computeLiquidity(String(1e18), String(1e18), buildData(18, 18, 10000))).to.eq(
+                String(2e18)
+            );
+        });
+
+        it("Successfully calculates D at imbalanced ratio", async () => {
+            // Compute how much total liquidity is available
+            expect(await test.computeLiquidity(String(1e18), String(2e18), buildData(18, 18, 100))).to.eq(
+                "2912328492271816922"
+            );
+
+            expect(await test.computeLiquidity(String(1e18), String(2e18), buildData(18, 18, 1000))).to.eq(
+                "2983226103055844164"
+            );
+
+            expect(await test.computeLiquidity(String(1e18), String(2e18), buildData(18, 18, 10000))).to.eq(
+                "2998146985239894576"
+            );
+        });
+
+        it("Computed liquidity increases after each swap even at 0.1% fee setting @ A = 1", async () => {
+            // Compute how much total liquidity is available
+            let reserve0 = BigNumber.from(10).pow(18);
+            let reserve1 = BigNumber.from(10).pow(18);
+            let data = buildData(18, 18, 100);
+            const SWAP_FEE = 1;
+
+            let computedLiquidity = await test.computeLiquidity(reserve0, reserve1, data);
+            expect(computedLiquidity).to.eq(String(2e18));
+
+            // Simulate a swap back and forth 100 times
+            for (let i = 0; i < 100; i++) {
+                let prevComputedLiquidity = computedLiquidity;
+
+                // Alternate tokenIn
+                let tokenIn = i % 2;
+
+                // Calculate amount out
+                let amountIn = BigNumber.from(10).pow(17);
+                let amountOut = await test.computeAmountOut(amountIn, reserve0, reserve1, data, SWAP_FEE, tokenIn);
+
+                // Update reserves based on tokenIn
+                if (tokenIn === 0) {
+                    reserve0 = reserve0.add(amountIn);
+                    reserve1 = reserve1.sub(amountOut);
+                } else {
+                    reserve1 = reserve1.add(amountIn);
+                    reserve0 = reserve0.sub(amountOut);
+                }
+
+                // Re-calculate available liquidity
+                computedLiquidity = await test.computeLiquidity(reserve0, reserve1, data);
+
+                // Check the available liquidity increased
+                expect(computedLiquidity).to.be.gt(prevComputedLiquidity);
+            }
+        });
+
+        it("Computed liquidity increases after each swap even at 0.1% fee setting @ A = 10", async () => {
+            // Compute how much total liquidity is available
+            let reserve0 = BigNumber.from(10).pow(18);
+            let reserve1 = BigNumber.from(10).pow(18);
+            let data = buildData(18, 18, 1000);
+            const SWAP_FEE = 1;
+
+            let computedLiquidity = await test.computeLiquidity(reserve0, reserve1, data);
+            expect(computedLiquidity).to.eq(String(2e18));
+
+            // Simulate a swap back and forth 100 times
+            for (let i = 0; i < 100; i++) {
+                let prevComputedLiquidity = computedLiquidity;
+
+                // Alternate tokenIn
+                let tokenIn = i % 2;
+
+                // Calculate amount out
+                let amountIn = BigNumber.from(10).pow(17);
+                let amountOut = await test.computeAmountOut(amountIn, reserve0, reserve1, data, SWAP_FEE, tokenIn);
+
+                // Update reserves based on tokenIn
+                if (tokenIn === 0) {
+                    reserve0 = reserve0.add(amountIn);
+                    reserve1 = reserve1.sub(amountOut);
+                } else {
+                    reserve1 = reserve1.add(amountIn);
+                    reserve0 = reserve0.sub(amountOut);
+                }
+
+                // Re-calculate available liquidity
+                computedLiquidity = await test.computeLiquidity(reserve0, reserve1, data);
+
+                // Check the available liquidity increased
+                expect(computedLiquidity).to.be.gt(prevComputedLiquidity);
+            }
+        });
+
+        it("Computed liquidity increases after each swap even at 0.1% fee setting @ A = 100", async () => {
+            // Compute how much total liquidity is available
+            let reserve0 = BigNumber.from(10).pow(18);
+            let reserve1 = BigNumber.from(10).pow(18);
+            let data = buildData(18, 18, 10000);
+            const SWAP_FEE = 1;
+
+            let computedLiquidity = await test.computeLiquidity(reserve0, reserve1, data);
+            expect(computedLiquidity).to.eq(String(2e18));
+
+            // Simulate a swap back and forth 100 times
+            for (let i = 0; i < 100; i++) {
+                let prevComputedLiquidity = computedLiquidity;
+
+                // Alternate tokenIn
+                let tokenIn = i % 2;
+
+                // Calculate amount out
+                let amountIn = BigNumber.from(10).pow(17);
+                let amountOut = await test.computeAmountOut(amountIn, reserve0, reserve1, data, SWAP_FEE, tokenIn);
+
+                // Update reserves based on tokenIn
+                if (tokenIn === 0) {
+                    reserve0 = reserve0.add(amountIn);
+                    reserve1 = reserve1.sub(amountOut);
+                } else {
+                    reserve1 = reserve1.add(amountIn);
+                    reserve0 = reserve0.sub(amountOut);
+                }
+
+                // Re-calculate available liquidity
+                computedLiquidity = await test.computeLiquidity(reserve0, reserve1, data);
+
+                // Check the available liquidity increased
+                expect(computedLiquidity).to.be.gt(prevComputedLiquidity);
+            }
+        });
+
+        it("Computed liquidity increases after each swap even at 0.1% fee setting @ A = 100, different decimals", async () => {
+            // Compute how much total liquidity is available
+            const decimal0 = 18;
+            const decimal1 = 6;
+            let reserve0 = BigNumber.from(10).pow(18);
+            let reserve1 = BigNumber.from(10).pow(6);
+            let data = buildData(18, 6, 10000);
+            const SWAP_FEE = 1;
+
+            let computedLiquidity = await test.computeLiquidity(reserve0, reserve1, data);
+            expect(computedLiquidity).to.eq(String(2e18));
+
+            // Simulate a swap back and forth 100 times
+            for (let i = 0; i < 100; i++) {
+                let prevComputedLiquidity = computedLiquidity;
+
+                // Alternate tokenIn
+                let tokenIn = i % 2;
+
+                // Calculate amount out
+                let amountIn = BigNumber.from(10).pow((tokenIn === 0 ? decimal0 : decimal1) - 1);
+                let amountOut = await test.computeAmountOut(amountIn, reserve0, reserve1, data, SWAP_FEE, tokenIn);
+
+                // Update reserves based on tokenIn
+                if (tokenIn === 0) {
+                    reserve0 = reserve0.add(amountIn);
+                    reserve1 = reserve1.sub(amountOut);
+                } else {
+                    reserve1 = reserve1.add(amountIn);
+                    reserve0 = reserve0.sub(amountOut);
+                }
+
+                // Re-calculate available liquidity
+                computedLiquidity = await test.computeLiquidity(reserve0, reserve1, data);
+
+                // Check the available liquidity increased
+                expect(computedLiquidity).to.be.gt(prevComputedLiquidity);
+            }
+        });
+
+        it("Computed liquidity increases after each swap even at 0.1% fee setting @ A = 100, different decimals, large reserves", async () => {
+            // Compute how much total liquidity is available
+            const decimal0 = 18;
+            const decimal1 = 6;
+            let reserve0 = BigNumber.from(10).pow(18).mul(10000000);
+            let reserve1 = BigNumber.from(10).pow(6).mul(10000000);
+            let data = buildData(18, 6, 10000);
+            const SWAP_FEE = 1;
+
+            let computedLiquidity = await test.computeLiquidity(reserve0, reserve1, data);
+            expect(computedLiquidity).to.eq(BigNumber.from(10).pow(18).mul(20000000));
+
+            // Simulate a swap back and forth 100 times
+            for (let i = 0; i < 100; i++) {
+                let prevComputedLiquidity = computedLiquidity;
+
+                // Alternate tokenIn
+                let tokenIn = i % 2;
+
+                // Calculate amount out
+                let amountIn = BigNumber.from(10).pow((tokenIn === 0 ? decimal0 : decimal1) + 5);
+                let amountOut = await test.computeAmountOut(amountIn, reserve0, reserve1, data, SWAP_FEE, tokenIn);
+
+                // Update reserves based on tokenIn
+                if (tokenIn === 0) {
+                    reserve0 = reserve0.add(amountIn);
+                    reserve1 = reserve1.sub(amountOut);
+                } else {
+                    reserve1 = reserve1.add(amountIn);
+                    reserve0 = reserve0.sub(amountOut);
+                }
+
+                // Re-calculate available liquidity
+                computedLiquidity = await test.computeLiquidity(reserve0, reserve1, data);
+
+                // Check the available liquidity increased
+                expect(computedLiquidity).to.be.gt(prevComputedLiquidity);
+            }
         });
     });
 });
