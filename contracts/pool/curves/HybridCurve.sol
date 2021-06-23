@@ -114,7 +114,7 @@ contract HybridCurve is IMirinCurve {
         uint8 tokenIn
     ) external pure override returns (uint256 amountIn) {
         require(amountOut > 0, "MIRIN: INSUFFICIENT_OUTPUT_AMOUNT");
-        require(reserve0 > 0 && reserve1 > 0, "MIRIN: INSUFFICIENT_LIQUIDITY");
+        require(reserve0 > 0 && reserve1 > 0 && (tokenIn != 0 ? reserve0 : reserve1) >= amountOut, "MIRIN: INSUFFICIENT_LIQUIDITY");
         require(swapFee <= MAX_SWAP_FEE, "MIRIN: INVALID_SWAP_FEE");
 
         (uint8 decimals0, uint8 decimals1, uint240 A) = decodeData(data);
