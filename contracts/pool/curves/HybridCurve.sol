@@ -3,17 +3,15 @@
 pragma solidity =0.8.4;
 
 import "../../interfaces/IMirinCurve.sol";
-import "../../libraries/SafeMath.sol";
 import "../../libraries/MathUtils.sol";
 
 /**
  * @dev Hybrid curve of constant product and constant sum ones (4a(r_0 +r _1) + k = 4ak + (k^3/4r_0r_1))
  * Excerpted from https://github.com/saddle-finance/saddle-contract/blob/0b76f7fb519e34b878aa1d58cffc8d8dc0572c12/contracts/SwapUtils.sol
  *
- * @author LevX
+ * @author LevX, penandlim(@weeb_mcgee)
  */
 contract HybridCurve is IMirinCurve {
-    using SafeMath for *;
     using MathUtils for uint256;
 
     uint8 private constant PRECISION = 104;
@@ -27,17 +25,21 @@ contract HybridCurve is IMirinCurve {
     // Constant values used in ramping A calculations
     uint256 private constant A_PRECISION = 100;
 
+    // Swap fee precision. Fees are in increments of 10 bps and cannot be higher than 10%.
+    uint256 private constant SWAP_FEE_PRECISION = 1000;
+    uint256 private constant MAX_SWAP_FEE = 100;
+
     function canUpdateData(bytes32 oldData, bytes32 newData) external pure override returns (bool) {
         (uint8 oldDecimals0, uint8 oldDecimals1, ) = decodeData(oldData);
         (uint8 newDecimals0, uint8 newDecimals1, uint240 newA) = decodeData(newData);
-        return oldDecimals0 == newDecimals0 && oldDecimals1 == newDecimals1 && newA > 0;
+        return oldDecimals0 == newDecimals0 && oldDecimals1 == newDecimals1 && newA >= A_PRECISION;
     }
 
     function isValidData(bytes32 data) public pure override returns (bool) {
         uint8 decimals0 = uint8(uint256(data) >> 248);
         uint8 decimals1 = uint8((uint256(data) >> 240) % (1 << 8));
         uint240 A = uint240(uint256(data));
-        return decimals0 <= POOL_PRECISION_DECIMALS && decimals1 <= POOL_PRECISION_DECIMALS && A > 0;
+        return decimals0 <= POOL_PRECISION_DECIMALS && decimals1 <= POOL_PRECISION_DECIMALS && A >= A_PRECISION;
     }
 
     function decodeData(bytes32 data)
@@ -53,7 +55,7 @@ contract HybridCurve is IMirinCurve {
         decimals1 = uint8((uint256(data) >> 240) % (1 << 8));
         A = uint240(uint256(data));
         require(
-            decimals0 <= POOL_PRECISION_DECIMALS && decimals1 <= POOL_PRECISION_DECIMALS && A > 0,
+            decimals0 <= POOL_PRECISION_DECIMALS && decimals1 <= POOL_PRECISION_DECIMALS && A >= A_PRECISION,
             "MIRIN: INVALID_DATA"
         );
     }
@@ -88,16 +90,19 @@ contract HybridCurve is IMirinCurve {
         bytes32 data,
         uint8 swapFee,
         uint8 tokenIn
-    ) external pure override returns (uint256) {
+    ) external pure override returns (uint256 amountOut) {
+        require(amountIn > 0, "MIRIN: INSUFFICIENT_INPUT_AMOUNT");
+        require(reserve0 > 0 && reserve1 > 0, "MIRIN: INSUFFICIENT_LIQUIDITY");
+        require(swapFee <= MAX_SWAP_FEE, "MIRIN: INVALID_SWAP_FEE");
+
         (uint8 decimals0, uint8 decimals1, uint240 A) = decodeData(data);
         uint256[2] memory xp = _xp(reserve0, reserve1, decimals0, decimals1);
         amountIn = amountIn * 10**(POOL_PRECISION_DECIMALS - (tokenIn != 0 ? decimals1 : decimals0));
         uint256 x = xp[tokenIn] + amountIn;
         uint256 y = _getY(x, xp, A);
-        uint256 dy = xp[1 - tokenIn] - y - 1;
-        dy = dy - ((dy * swapFee) / 1000);
-        dy = dy * 10**(POOL_PRECISION_DECIMALS - (tokenIn != 0 ? decimals0 : decimals1));
-        return dy;
+        amountOut = xp[1 - tokenIn] - y - 1;
+        amountOut = (amountOut * (SWAP_FEE_PRECISION - swapFee)) / SWAP_FEE_PRECISION;
+        amountOut = amountOut / 10**(POOL_PRECISION_DECIMALS - (tokenIn != 0 ? decimals0 : decimals1));
     }
 
     function computeAmountIn(
@@ -108,7 +113,18 @@ contract HybridCurve is IMirinCurve {
         uint8 swapFee,
         uint8 tokenIn
     ) external pure override returns (uint256 amountIn) {
-        amountIn = 0; // TODO
+        require(amountOut > 0, "MIRIN: INSUFFICIENT_OUTPUT_AMOUNT");
+        require(reserve0 > 0 && reserve1 > 0 && (tokenIn != 0 ? reserve0 : reserve1) >= amountOut, "MIRIN: INSUFFICIENT_LIQUIDITY");
+        require(swapFee <= MAX_SWAP_FEE, "MIRIN: INVALID_SWAP_FEE");
+
+        (uint8 decimals0, uint8 decimals1, uint240 A) = decodeData(data);
+        uint256[2] memory xp = _xp(reserve0, reserve1, decimals0, decimals1);
+        amountOut = amountOut * 10**(POOL_PRECISION_DECIMALS - (tokenIn != 0 ? decimals0 : decimals1));
+        amountOut = (amountOut * SWAP_FEE_PRECISION) / (SWAP_FEE_PRECISION - swapFee);
+        uint256 y = xp[1 - tokenIn] - amountOut;
+        uint256 x = _getY(y, xp, A);
+        amountIn = x + 1 - xp[tokenIn];
+        amountIn = amountIn / 10**(POOL_PRECISION_DECIMALS - (tokenIn != 0 ? decimals1: decimals0));
     }
 
     /**
@@ -134,14 +150,18 @@ contract HybridCurve is IMirinCurve {
         uint256 nA = _A * 2;
 
         for (uint256 i = 0; i < MAX_LOOP_LIMIT; i++) {
-            uint256 dP = D**3 / (xp[0] * xp[1] * 4);
+            uint256 dP = ((D**2) / (xp[0] * 2)) * D / (xp[1] * 2);
+
             prevD = D;
-            D = nA.mul(s).div(A_PRECISION).add(dP * 2).mul(D).div(nA.div(A_PRECISION).sub(1).mul(D).add(dP * 3));
+            D = (((nA * s / A_PRECISION) + (dP * 2)) * D) / (
+                (nA - A_PRECISION) * D / A_PRECISION + (dP * 3)
+            );
+
             if (D.within1(prevD)) {
-                break;
+                return D;
             }
         }
-        return D;
+        revert("MIRIN: MAX_LOOP_REACHED");
     }
 
     /**
@@ -163,22 +183,22 @@ contract HybridCurve is IMirinCurve {
     ) private pure returns (uint256) {
         uint256 D = _getD(xp, _A);
         uint256 nA = 2 * _A;
-        uint256 c = D**2 / (x * 2);
 
-        c = (c * D * A_PRECISION) / (nA * 2);
+        uint256 c = ((D**2) / (x * 2)) * D * A_PRECISION / (nA * 2);
         uint256 b = x + ((D * A_PRECISION) / nA);
+
         uint256 yPrev;
         uint256 y = D;
 
         // iterative approximation
         for (uint256 i = 0; i < MAX_LOOP_LIMIT; i++) {
             yPrev = y;
-            y = (y * y + c) / (y * 2 + b - D);
+            y = (y**2 + c) / (y * 2 + b - D);
             if (y.within1(yPrev)) {
-                break;
+                return y;
             }
         }
-        return y;
+        revert("MIRIN: MAX_LOOP_REACHED");
     }
 
     /**
@@ -213,17 +233,17 @@ contract HybridCurve is IMirinCurve {
         uint256 c = D**2 / (s * 2);
         c = (c * D * A_PRECISION) / (nA * 2);
 
-        uint256 b = s.add(D.mul(A_PRECISION).div(nA));
+        uint256 b = s + D * A_PRECISION / nA;
         uint256 yPrev;
         uint256 y = D;
         for (uint256 i = 0; i < MAX_LOOP_LIMIT; i++) {
             yPrev = y;
-            y = (y * y + c) / (y * 2 + b - D);
+            y = (y ** 2 + c) / (y * 2 + b - D);
             if (y.within1(yPrev)) {
-                break;
+                return y;
             }
         }
-        return y;
+        revert("MIRIN: MAX_LOOP_REACHED");
     }
 
     function _xp(
